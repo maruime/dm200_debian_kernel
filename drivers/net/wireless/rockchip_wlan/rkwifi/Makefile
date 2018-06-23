@@ -1,8 +1,8 @@
 #rkwifi packed Makefile
 # (gwl)
 
-obj-$(CONFIG_RKWIFI) += rk_wifi_config.o
 obj-$(CONFIG_RKWIFI) += bcmdhd/ 
+obj-$(CONFIG_RKWIFI) += rk_wifi_config.o
 
 .PHONY: clean
 

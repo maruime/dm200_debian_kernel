@@ -97,6 +97,16 @@ static ssize_t wifi_chip_read(struct class *cls, struct class_attribute *attr, c
 	    printk("Current WiFi chip is RTL8723BS_VQ0.\n");
 	}		
 	
+	if(type == WIFI_RTL8723CS) {
+	    count = sprintf(_buf, "%s", "RTL8723CS");
+	    printk("Current WiFi chip is RTL8723CS.\n");
+	}
+
+	if(type == WIFI_RTL8723DS) {
+	    count = sprintf(_buf, "%s", "RTL8723DS");
+	    printk("Current WiFi chip is RTL8723DS.\n");
+	}
+	
 	if(type == WIFI_RTL8723BU) {
 	    count = sprintf(_buf, "%s", "RTL8723BU");
 	    printk("Current WiFi chip is RTL8723BU.\n");
@@ -117,6 +127,25 @@ static ssize_t wifi_chip_read(struct class *cls, struct class_attribute *attr, c
 	    printk("Current WiFi chip is ESP8089.\n");
 	}
 
+        if(type == WIFI_RTL8189FS) {
+            count = sprintf(_buf, "%s", "RTL8189FS");
+            printk("Current WiFi chip is RTL8189FS.\n");
+        }
+
+        if(type == WIFI_RTL8188FU) {
+            count = sprintf(_buf, "%s", "RTL8188FU");
+            printk("Current WiFi chip is RTL8188FU.\n");
+        }
+
+        if(type == WIFI_SSV6051) {
+	    count = sprintf(_buf, "%s", "SSV6051");
+            printk("Current WiFi chip is SSV6051.\n");
+	}
+
+	if (type == WIFI_RTL8822BS) {
+	    count = sprintf(_buf, "%s", "RTL8822BS");
+	    printk("Current WiFi chip is RTL8822BS.\n");
+	}
     return count;
 }
 
@@ -146,43 +175,73 @@ extern int rockchip_wifi_init_module_rtkwifi(void);
 extern void rockchip_wifi_exit_module_rtkwifi(void);
 extern int rockchip_wifi_init_module_esp8089(void);
 extern void rockchip_wifi_exit_module_esp8089(void);
+extern int rockchip_wifi_init_module_ssv6xxx(void);
+extern void rockchip_wifi_exit_module_ssv6xxx(void);
 #endif
 static struct semaphore driver_sem;
+#ifdef CONFIG_WIFI_LOAD_DRIVER_WHEN_KERNEL_BOOTUP
+static int wifi_driver_insmod = 1;
+#else
 static int wifi_driver_insmod = 0;
+#endif
 
 static int wifi_init_exit_module(int enable)
 {
-    int ret = 0;
-    int type = get_wifi_chip_type();
-//#ifdef CONFIG_RKWIFI
-    if (type < WIFI_AP6XXX_SERIES) {
-        if (enable > 0)
-            ret = rockchip_wifi_init_module_rkwifi();
-        else
-            rockchip_wifi_exit_module_rkwifi();
-        return ret;
-    }
-//#endif
-#ifdef CONFIG_RTL_WIRELESS_SOLUTION
-    if (type < WIFI_RTL_SERIES) {
-        if (enable > 0) 
-            ret = rockchip_wifi_init_module_rtkwifi();
-        else
-            rockchip_wifi_exit_module_rtkwifi();
-        return ret;
-    }
-#endif
+	int ret = 0;
+#ifdef CONFIG_WIFI_BUILD_MODULE
+#else
+	int type = 0;
+	type = get_wifi_chip_type();
+#ifdef CONFIG_WIFI_LOAD_DRIVER_WHEN_KERNEL_BOOTUP
 #ifdef CONFIG_ESP8089
-    if (type == WIFI_ESP8089) {
-        if (enable > 0)  
-            ret = rockchip_wifi_init_module_esp8089();
-        else
-            rockchip_wifi_exit_module_esp8089();
-        return ret;
-    }
+	if (type == WIFI_ESP8089) {
+		if (enable > 0)
+			ret = rockchip_wifi_init_module_esp8089();
+		else
+			rockchip_wifi_exit_module_esp8089();
+		return ret;
+	}
 #endif
-
-    return ret;
+#ifdef CONFIG_RKWIFI
+	if (type < WIFI_AP6XXX_SERIES) {
+		if (enable > 0)
+			ret = rockchip_wifi_init_module_rkwifi();
+		else
+			rockchip_wifi_exit_module_rkwifi();
+		return ret;
+	}
+#endif
+#ifdef CONFIG_RTL_WIRELESS_SOLUTION
+	if (type < WIFI_RTL_SERIES) {
+		if (enable > 0)
+			ret = rockchip_wifi_init_module_rtkwifi();
+		else
+			rockchip_wifi_exit_module_rtkwifi();
+		return ret;
+	}
+#endif
+#else
+#ifdef CONFIG_RKWIFI
+	if (type < WIFI_AP6XXX_SERIES) {
+		if (enable > 0)
+			ret = rockchip_wifi_init_module_rkwifi();
+		else
+			rockchip_wifi_exit_module_rkwifi();
+		return ret;
+	}
+#endif
+#ifdef CONFIG_RTL_WIRELESS_SOLUTION
+	if (type < WIFI_RTL_SERIES) {
+		if (enable > 0)
+			ret = rockchip_wifi_init_module_rtkwifi();
+		else
+			rockchip_wifi_exit_module_rtkwifi();
+		return ret;
+	}
+#endif
+#endif
+#endif
+	return ret;
 }
 
 static ssize_t wifi_driver_write(struct class *cls, struct class_attribute *attr, const char *_buf, size_t _count)
@@ -215,6 +274,9 @@ static struct class *rkwifi_class = NULL;
 static CLASS_ATTR(chip, 0664, wifi_chip_read, NULL);
 static CLASS_ATTR(power, 0660, NULL, wifi_power_write);
 static CLASS_ATTR(driver, 0660, NULL, wifi_driver_write);
+#ifdef CONFIG_WIFI_LOAD_DRIVER_WHEN_KERNEL_BOOTUP
+static CLASS_ATTR(preload, 0660, NULL, NULL);
+#endif
 
 int rkwifi_sysif_init(void)
 {
@@ -234,6 +296,9 @@ int rkwifi_sysif_init(void)
     ret =  class_create_file(rkwifi_class, &class_attr_chip);
     ret =  class_create_file(rkwifi_class, &class_attr_power);
     ret =  class_create_file(rkwifi_class, &class_attr_driver);
+#ifdef CONFIG_WIFI_LOAD_DRIVER_WHEN_KERNEL_BOOTUP
+    ret =  class_create_file(rkwifi_class, &class_attr_preload);
+#endif
     sema_init(&driver_sem, 1);
     
     return 0;
@@ -245,6 +310,9 @@ void rkwifi_sysif_exit(void)
     class_remove_file(rkwifi_class, &class_attr_chip);
     class_remove_file(rkwifi_class, &class_attr_power);
     class_remove_file(rkwifi_class, &class_attr_driver);
+#ifdef CONFIG_WIFI_LOAD_DRIVER_WHEN_KERNEL_BOOTUP
+    class_remove_file(rkwifi_class, &class_attr_preload);
+#endif
     class_destroy(rkwifi_class);
     
     rkwifi_class = NULL;

@@ -3,7 +3,7 @@
  *
  * $Copyright Open Broadcom Corporation$
  *
- * $Id: dhd_common.c 490628 2014-07-11 07:13:31Z $
+ * $Id: dhd_common.c 492215 2014-07-20 16:44:15Z $
  */
 #include <typedefs.h>
 #include <osl.h>
@@ -29,6 +29,7 @@
 #include <dhd_bus.h>
 #include <dhd_proto.h>
 #include <dhd_config.h>
+#include <bcmsdbus.h>
 #include <dhd_dbg.h>
 #include <msgtrace.h>
 
@@ -411,6 +412,10 @@ dhd_iovar_parse_bssidx(dhd_pub_t *dhd_pub, char *params, int *idx, char **val)
 	return BCME_OK;
 }
 
+#ifdef PKT_STATICS
+extern pkt_statics_t tx_statics;
+extern void dhdsdio_txpktstatics(void);
+#endif
 static int
 dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const char *name,
             void *params, int plen, void *arg, int len, int val_size)
@@ -431,36 +436,39 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 	case IOV_GVAL(IOV_VERSION):
 		/* Need to have checked buffer length */
 		bcm_strncpy_s((char*)arg, len, dhd_version, len);
+#ifdef PKT_STATICS
+		memset((uint8*) &tx_statics, 0, sizeof(pkt_statics_t));
+#endif
 		break;
 
 	case IOV_GVAL(IOV_WLMSGLEVEL):
-		printk("android_msg_level=0x%x\n", android_msg_level);
-		printk("config_msg_level=0x%x\n", config_msg_level);
+		printf("android_msg_level=0x%x\n", android_msg_level);
+		printf("config_msg_level=0x%x\n", config_msg_level);
 #if defined(WL_WIRELESS_EXT)
 		int_val = (int32)iw_msg_level;
 		bcopy(&int_val, arg, val_size);
-		printk("iw_msg_level=0x%x\n", iw_msg_level);
+		printf("iw_msg_level=0x%x\n", iw_msg_level);
 #endif
 #ifdef WL_CFG80211
 		int_val = (int32)wl_dbg_level;
 		bcopy(&int_val, arg, val_size);
-		printk("cfg_msg_level=0x%x\n", wl_dbg_level);
+		printf("cfg_msg_level=0x%x\n", wl_dbg_level);
 #endif
 		break;
 
 	case IOV_SVAL(IOV_WLMSGLEVEL):
 		if (int_val & DHD_ANDROID_VAL) {
 			android_msg_level = (uint)(int_val & 0xFFFF);
-			printk("android_msg_level=0x%x\n", android_msg_level);
+			printf("android_msg_level=0x%x\n", android_msg_level);
 		}
 		if (int_val & DHD_CONFIG_VAL) {
 			config_msg_level = (uint)(int_val & 0xFFFF);
-			printk("config_msg_level=0x%x\n", config_msg_level);
+			printf("config_msg_level=0x%x\n", config_msg_level);
 		}
 #if defined(WL_WIRELESS_EXT)
 		if (int_val & DHD_IW_VAL) {
 			iw_msg_level = (uint)(int_val & 0xFFFF);
-			printk("iw_msg_level=0x%x\n", iw_msg_level);
+			printf("iw_msg_level=0x%x\n", iw_msg_level);
 		}
 #endif
 #ifdef WL_CFG80211
@@ -473,6 +481,9 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 	case IOV_GVAL(IOV_MSGLEVEL):
 		int_val = (int32)dhd_msg_level;
 		bcopy(&int_val, arg, val_size);
+#ifdef PKT_STATICS
+		dhdsdio_txpktstatics();
+#endif
 		break;
 
 	case IOV_SVAL(IOV_MSGLEVEL):
@@ -1852,7 +1863,7 @@ wl_host_event(dhd_pub_t *dhd_pub, int *ifidx, void *pktdata,
 		if (type != WLC_E_LINK) {
 			uint8 ifindex = (uint8)hostidx;
 			uint8 role = dhd_flow_rings_ifindex2role(dhd_pub, ifindex);
-			if (role == WLC_E_IF_ROLE_STA) {
+			if (DHD_IF_ROLE_STA(role)) {
 				dhd_flow_rings_delete(dhd_pub, ifindex);
 			} else {
 				dhd_flow_rings_delete_for_peer(dhd_pub, ifindex,
@@ -2007,7 +2018,7 @@ dhd_pktfilter_offload_enable(dhd_pub_t * dhd, char *arg, int enable, int master_
 	rc = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, buf, buf_len, TRUE, 0);
 	rc = rc >= 0 ? 0 : rc;
 	if (rc)
-		DHD_TRACE(("%s: failed to %s pktfilter %s, retcode = %d\n",
+		DHD_ERROR(("%s: failed to %s pktfilter %s, retcode = %d\n",
 		__FUNCTION__, enable?"enable":"disable", arg, rc));
 	else
 		DHD_TRACE(("%s: successfully %s pktfilter %s\n",
@@ -2151,7 +2162,7 @@ dhd_pktfilter_offload_set(dhd_pub_t * dhd, char *arg)
 	rc = rc >= 0 ? 0 : rc;
 
 	if (rc)
-		DHD_TRACE(("%s: failed to add pktfilter %s, retcode = %d\n",
+		DHD_ERROR(("%s: failed to add pktfilter %s, retcode = %d\n",
 		__FUNCTION__, arg, rc));
 	else
 		DHD_TRACE(("%s: successfully added pktfilter %s\n",
@@ -2519,7 +2530,9 @@ dhd_get_suspend_bcn_li_dtim(dhd_pub_t *dhd)
 	int ret = -1;
 	int dtim_period = 0;
 	int ap_beacon = 0;
+#ifndef ENABLE_MAX_DTIM_IN_SUSPEND
 	int allowed_skip_dtim_cnt = 0;
+#endif /* !ENABLE_MAX_DTIM_IN_SUSPEND */
 	/* Check if associated */
 	if (dhd_is_associated(dhd, NULL, NULL) == FALSE) {
 		DHD_TRACE(("%s NOT assoc ret %d\n", __FUNCTION__, ret));
@@ -2545,6 +2558,13 @@ dhd_get_suspend_bcn_li_dtim(dhd_pub_t *dhd)
 		goto exit;
 	}
 
+#ifdef ENABLE_MAX_DTIM_IN_SUSPEND
+	bcn_li_dtim = (int) (MAX_DTIM_ALLOWED_INTERVAL / (ap_beacon * dtim_period));
+	if (bcn_li_dtim == 0) {
+		bcn_li_dtim = 1;
+	}
+	bcn_li_dtim = MAX(dhd->suspend_bcn_li_dtim, bcn_li_dtim);
+#else /* ENABLE_MAX_DTIM_IN_SUSPEND */
 	/* attemp to use platform defined dtim skip interval */
 	bcn_li_dtim = dhd->suspend_bcn_li_dtim;
 
@@ -2567,6 +2587,7 @@ dhd_get_suspend_bcn_li_dtim(dhd_pub_t *dhd)
 		bcn_li_dtim = (int)(CUSTOM_LISTEN_INTERVAL / dtim_period);
 		DHD_TRACE(("%s agjust dtim_skip as %d\n", __FUNCTION__, bcn_li_dtim));
 	}
+#endif /* ENABLE_MAX_DTIM_IN_SUSPEND */
 
 	DHD_ERROR(("%s beacon=%d bcn_li_dtim=%d DTIM=%d Listen=%d\n",
 		__FUNCTION__, ap_beacon, bcn_li_dtim, dtim_period, CUSTOM_LISTEN_INTERVAL));

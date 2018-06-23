@@ -30,6 +30,7 @@ struct rksdmmc_gpio_wifi_moudle {
     bool wifi_power_remain;
     struct rksdmmc_pmu    mregulator;
     struct rksdmmc_pmu    ioregulator;
+    struct rksdmmc_gpio   vbat_n;
     struct rksdmmc_gpio   power_n;  //PMU_EN  
     struct rksdmmc_gpio   reset_n;  //SYSRET_B, DAIRST 
     struct rksdmmc_gpio   vddio;
@@ -39,6 +40,7 @@ struct rksdmmc_gpio_wifi_moudle {
     struct rksdmmc_gpio   ANTSEL2;  //pin5--ANTSEL2  
     struct rksdmmc_gpio   ANTSEL3;  //pin6--ANTSEL3 
     struct rksdmmc_gpio   GPS_LAN;  //pin33--GPS_LAN
+    struct regmap *grf;
 };
 
 enum {
@@ -60,12 +62,18 @@ enum {
     WIFI_RTL8723AS,
     WIFI_RTL8723BS,
     WIFI_RTL8723BS_VQ0,
+    WIFI_RTL8723CS,
+    WIFI_RTL8723DS,
     WIFI_RTL8723BU,
     WIFI_RTL8723AU,
     WIFI_RTL8189ES,
     WIFI_RTL8812AU,
+    WIFI_RTL8189FS,
+    WIFI_RTL8188FU,
+    WIFI_RTL8822BS,
     WIFI_RTL_SERIES,
     WIFI_ESP8089,
+    WIFI_SSV6051,
     TYPE_MAX,
 };
 
@@ -78,4 +86,11 @@ int rockchip_wifi_get_oob_irq(void);
 int rockchip_wifi_reset(int on);
 int rockchip_wifi_mac_addr(unsigned char *buf);
 void *rockchip_wifi_country_code(char *ccode);
+
+#ifdef CONFIG_RFKILL_RK
+int get_wifi_chip_type(void);
+#else
+static inline int get_wifi_chip_type(void) { return -1; }
+#endif
+
 #endif
