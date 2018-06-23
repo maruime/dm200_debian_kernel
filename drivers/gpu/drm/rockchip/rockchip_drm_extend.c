@@ -40,7 +40,7 @@
 #include "rockchip_drm_crtc.h"
 #include "rockchip_drm_iommu.h"
 #include "rockchip_drm_extend.h"
-static struct device *g_dev = NULL;
+static struct device *g_dev;
 static int extend_activate(struct extend_context *ctx, bool enable);
 #if 0
 extern struct void *get_extend_drv(void);
@@ -77,11 +77,9 @@ static bool extend_display_is_connected(struct device *dev)
 {
 	struct extend_context *ctx = get_extend_context(dev);
 	struct rk_drm_display *drm_disp = ctx->drm_disp;
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-	printk(KERN_ERR"%s %d\n", __func__,__LINE__);
 
-	return drm_disp->is_connected?true:false;
-	
+	return drm_disp->is_connected ? true : false;
+
 	/* TODO. */
 }
 
@@ -93,17 +91,16 @@ static void *extend_get_panel(struct device *dev)
 	struct fb_modelist *modelist;
 	struct fb_videomode *mode;
 
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-	if(!drm_disp->is_connected)
+	if (!drm_disp->is_connected)
 		return NULL;
-	list_for_each(pos,drm_disp->modelist){
+	list_for_each(pos, drm_disp->modelist) {
 		modelist = list_entry(pos, struct fb_modelist, list);
 		mode = &modelist->mode;
-		if(mode->flag == HDMI_VIDEO_DEFAULT_MODE)
+		if (mode->flag == HDMI_VIDEO_DEFAULT_MODE)
 			break;
 	}
-	
-	memcpy(&ctx->panel->timing,mode,sizeof(struct fb_videomode));
+
+	memcpy(&ctx->panel->timing, mode, sizeof(struct fb_videomode));
 
 	return ctx->panel;
 }
@@ -116,9 +113,6 @@ static void *extend_get_modelist(struct device *dev)
 }
 static int extend_check_timing(struct device *dev, void *timing)
 {
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-
-	printk(KERN_ERR"%s %d\n", __func__,__LINE__);
 	/* TODO. */
 
 	return 0;
@@ -127,17 +121,14 @@ static int extend_check_timing(struct device *dev, void *timing)
 static int extend_display_power_on(struct device *dev, int mode)
 {
 	struct extend_context *ctx = get_extend_context(dev);
-	DRM_DEBUG_KMS("%s\n", __FILE__);
 	/* TODO */
-	printk(KERN_ERR"%s %d\n", __func__,__LINE__);
-	extend_activate(ctx,mode == DRM_MODE_DPMS_ON?true:false);
-	
+	extend_activate(ctx, mode == DRM_MODE_DPMS_ON ? true : false);
+
 	return 0;
 }
 struct edid *extend_get_edid(struct device *dev,
-			struct drm_connector *connector)
+			     struct drm_connector *connector)
 {
-#if 0
 	int i, j = 0, valid_extensions = 0;
 	struct hdmi *hdmi = get_extend_drv();
 	u8 *block, *new;
@@ -145,11 +136,12 @@ struct edid *extend_get_edid(struct device *dev,
 	struct edid *raw_edid = NULL;
 	bool print_bad_edid = !connector->bad_edid_counter;
 
-	if ((block = kmalloc(EDID_LENGTH, GFP_KERNEL)) == NULL)
+	block = kmalloc(EDID_LENGTH, GFP_KERNEL)
+	if (block == NULL)
 		return NULL;
 	/* base block fetch */
 	for (i = 0; i < 4; i++) {
-		if(hdmi->read_edid(hdmi, 0, block))
+		if (hdmi->read_edid(hdmi, 0, block))
 			goto out;
 		if (drm_edid_block_valid(block, 0, print_bad_edid))
 			break;
@@ -168,9 +160,12 @@ struct edid *extend_get_edid(struct device *dev,
 
 	for (j = 1; j <= block[0x7e]; j++) {
 		for (i = 0; i < 4; i++) {
-			if(hdmi->read_edid(hdmi, j, block))
+			if (hdmi->read_edid(hdmi, j, block))
 				goto out;
-			if (drm_edid_block_valid(block + (valid_extensions + 1) * EDID_LENGTH, j, print_bad_edid)) {
+			if (drm_edid_block_valid(block +
+						 (valid_extensions + 1) *
+						 EDID_LENGTH,
+						 j, print_bad_edid)) {
 				valid_extensions++;
 				break;
 			}
@@ -178,9 +173,8 @@ struct edid *extend_get_edid(struct device *dev,
 
 		if (i == 4 && print_bad_edid) {
 			dev_warn(connector->dev->dev,
-			 "%s: Ignoring invalid EDID block %d.\n",
-			 drm_get_connector_name(connector), j);
-
+				 "%s: Ignoring invalid EDID block %d.\n",
+				 drm_get_connector_name(connector), j);
 			connector->bad_edid_counter++;
 		}
 	}
@@ -188,7 +182,9 @@ struct edid *extend_get_edid(struct device *dev,
 	if (valid_extensions != block[0x7e]) {
 		block[EDID_LENGTH-1] += block[0x7e] - valid_extensions;
 		block[0x7e] = valid_extensions;
-		new = krealloc(block, (valid_extensions + 1) * EDID_LENGTH, GFP_KERNEL);
+		new = krealloc(block,
+			       (valid_extensions + 1) * EDID_LENGTH,
+			       GFP_KERNEL);
 		if (!new)
 			goto out;
 		block = new;
@@ -206,13 +202,13 @@ carp:
 out:
 	kfree(block);
 	raw_edid = (struct edid *)fake_edid_info;
-	edid = kmemdup(raw_edid, (1 + raw_edid->extensions) * EDID_LENGTH, GFP_KERNEL);
+	edid = kmemdup(raw_edid,
+		       (1 + raw_edid->extensions) * EDID_LENGTH, GFP_KERNEL);
 	if (!edid) {
 		DRM_DEBUG_KMS("failed to allocate edid\n");
 		return ERR_PTR(-ENOMEM);
 	}
 	return edid;
-#endif
 }
 
 static struct rockchip_drm_display_ops extend_display_ops = {
@@ -222,18 +218,15 @@ static struct rockchip_drm_display_ops extend_display_ops = {
 	.get_modelist = extend_get_modelist,
 	.check_timing = extend_check_timing,
 	.power_on = extend_display_power_on,
-//	.get_edid = extend_get_edid,
+	/* .get_edid = extend_get_edid, */
 };
 
 static void extend_dpms(struct device *subdrv_dev, int mode)
 {
 	struct extend_context *ctx = get_extend_context(subdrv_dev);
 
-	DRM_DEBUG_KMS("%s, %d\n", __FILE__, mode);
-
 	mutex_lock(&ctx->lock);
 
-	printk(KERN_ERR"%s %d\n", __func__,__LINE__);
 	switch (mode) {
 	case DRM_MODE_DPMS_ON:
 		/*
@@ -269,9 +262,6 @@ static void extend_apply(struct device *subdrv_dev)
 	struct extend_win_data *win_data;
 	int i;
 
-	printk(KERN_ERR"%s %d\n", __func__,__LINE__);
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-
 	for (i = 0; i < WINDOWS_NR; i++) {
 		win_data = &ctx->win_data[i];
 		if (win_data->enabled && (ovl_ops && ovl_ops->commit))
@@ -286,23 +276,21 @@ static void extend_commit(struct device *dev)
 {
 	struct extend_context *ctx = get_extend_context(dev);
 	struct rk_drm_display *drm_disp = ctx->drm_disp;
-	struct rockchip_drm_panel_info *panel = (struct rockchip_drm_panel_info *)extend_get_panel(dev);
+	struct rockchip_drm_panel_info *panel =
+			(struct rockchip_drm_panel_info *)extend_get_panel(dev);
 
-//	printk(KERN_ERR"%s %d\n", __func__,__LINE__);
 	if (ctx->suspended)
 		return;
 
 	drm_disp->mode = &panel->timing;
 
 	drm_disp->enable = true;
-	rk_drm_disp_handle(drm_disp,0,RK_DRM_SCREEN_SET);
+	rk_drm_disp_handle(drm_disp, 0, RK_DRM_SCREEN_SET);
 }
 
 static int extend_enable_vblank(struct device *dev)
 {
 	struct extend_context *ctx = get_extend_context(dev);
-
-	DRM_DEBUG_KMS("%s\n", __FILE__);
 
 	if (ctx->suspended)
 		return -EPERM;
@@ -315,11 +303,9 @@ static void extend_disable_vblank(struct device *dev)
 {
 	struct extend_context *ctx = get_extend_context(dev);
 
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-
 	if (ctx->suspended)
 		return;
-	
+
 	ctx->vblank_en = false;
 }
 
@@ -339,53 +325,53 @@ static void extend_wait_for_vblank(struct device *dev)
 #endif
 }
 
-static void extend_event_call_back_handle(struct rk_drm_display *drm_disp,int win_id,int event)
+static void extend_event_call_back_handle(struct rk_drm_display *drm_disp,
+					  int win_id, int event)
 {
 	struct extend_context *ctx = get_extend_context(g_dev);
 	struct rockchip_drm_subdrv *subdrv = &ctx->subdrv;
 	struct rockchip_drm_manager *manager = subdrv->manager;
 	struct drm_device *drm_dev = subdrv->drm_dev;
-	switch(event){
-		case RK_DRM_CALLBACK_VSYNC:
-			/* check the crtc is detached already from encoder */
-			if (manager->pipe < 0)
-				return;
-		
-			drm_handle_vblank(drm_dev, manager->pipe);
-			rockchip_drm_crtc_finish_pageflip(drm_dev, manager->pipe);
 
-			/* set wait vsync event to zero and wake up queue. */
-			if (atomic_read(&ctx->wait_vsync_event)) {
-				atomic_set(&ctx->wait_vsync_event, 0);
-				DRM_WAKEUP(&ctx->wait_vsync_queue);
-			}
-			break;
-		case RK_DRM_CALLBACK_HOTPLUG:
+	switch (event) {
+	case RK_DRM_CALLBACK_VSYNC:
+		/* check the crtc is detached already from encoder */
+		if (manager->pipe < 0)
+			return;
+
+		drm_handle_vblank(drm_dev, manager->pipe);
+		rockchip_drm_crtc_finish_pageflip(drm_dev, manager->pipe);
+
+		/* set wait vsync event to zero and wake up queue. */
+		if (atomic_read(&ctx->wait_vsync_event)) {
+			atomic_set(&ctx->wait_vsync_event, 0);
+			DRM_WAKEUP(&ctx->wait_vsync_queue);
+		}
+		break;
+	case RK_DRM_CALLBACK_HOTPLUG:
 #if 0
-			if(0){//primary_is_display == 0){
-				printk(KERN_ERR"-->%s waitfor hotplug event %d\n",__func__,event);
-				int is_connected = drm_disp->is_connected;
-				drm_disp->is_connected = false;
+		if (0) {
+			int is_connected = drm_disp->is_connected;
+			drm_disp->is_connected = false;
 
-				if (!wait_event_timeout(wait_primary_queue,
-							primary_is_display,
-							20*1000)){
-					printk(KERN_ERR"-->%s waitfot hotplug event %d timeout\n",__func__,event);
-				}
-				drm_disp->is_connected = true;
+			if (!wait_event_timeout(wait_primary_queue,
+						primary_is_display,
+						20*1000)) {
 			}
+			drm_disp->is_connected = true;
+		}
 #endif
-			printk(KERN_ERR"-->%s hotplug event %d\n",__func__,event);
-			drm_helper_hpd_irq_event(drm_dev);
-			break;
+		drm_helper_hpd_irq_event(drm_dev);
+		break;
 
-		default:
-			printk(KERN_ERR"-->%s unhandle event %d\n",__func__,event);
-			break;
+	default:
+		pr_err("-->%s unhandle event %d\n", __func__, event);
+		break;
 	}
 }
-static void extend_get_max_resol(void *ctx, unsigned int *width,
-					unsigned int *height)
+
+static void extend_get_max_resol(struct device *dev, unsigned int *width,
+				 unsigned int *height)
 {
 	DRM_DEBUG_KMS("[%d] %s\n", __LINE__, __func__);
 
@@ -403,19 +389,16 @@ static struct rockchip_drm_manager_ops extend_manager_ops = {
 };
 
 static void extend_win_mode_set(struct device *dev,
-			      struct rockchip_drm_overlay *overlay)
+				struct rockchip_drm_overlay *overlay)
 {
 	struct extend_context *ctx = get_extend_context(dev);
 	struct rk_drm_display *drm_disp = ctx->drm_disp;
 	struct extend_win_data *win_data;
 	int win;
 	unsigned long offset;
-	struct list_head *pos,*head;
+	struct list_head *pos, *head;
 	struct fb_modelist *modelist;
 	struct fb_videomode *mode;
-	struct drm_display_mode *disp_mode = NULL;
-
-	DRM_DEBUG_KMS("%s\n", __FILE__);
 
 	if (!overlay) {
 		dev_err(dev, "overlay is NULL\n");
@@ -429,45 +412,49 @@ static void extend_win_mode_set(struct device *dev,
 	if (win < 0 || win > WINDOWS_NR)
 		return;
 
-	offset = overlay->fb_x * (overlay->bpp >> 3);
-	offset += overlay->fb_y * overlay->pitch;
-
-//	printk("offset = 0x%lx, pitch = %x\n", offset, overlay->pitch);
-//	printk("crtc_x=%d crtc_y=%d crtc_width=%d crtc_height=%d\n",overlay->crtc_x,overlay->crtc_y,overlay->crtc_width,overlay->crtc_height);
-//	printk("fb_width=%d fb_height=%d dma_addr=%x offset=%x\n",overlay->fb_width,overlay->fb_height,overlay->dma_addr[0],offset);
-
 	win_data = &ctx->win_data[win];
+	win_data->offset_x = overlay->crtc_x; /* xpos */
+	win_data->offset_y = overlay->crtc_y; /* ypos */
+	win_data->ovl_width = overlay->crtc_width; /* xsize*/
+	win_data->ovl_height = overlay->crtc_height; /* ysize */
+	win_data->fb_width = overlay->fb_width;	/* xvir */
+	win_data->fb_height = overlay->fb_height;  /* yvir */
+	win_data->src_width = overlay->src_width; /* xact */
+	win_data->src_height = overlay->src_height; /* yact */
 
-	win_data->offset_x = overlay->crtc_x;
-	win_data->offset_y = overlay->crtc_y;
-	win_data->ovl_width = overlay->crtc_width;
-	win_data->ovl_height = overlay->crtc_height;
-	win_data->fb_width = overlay->fb_width;
-	win_data->fb_height = overlay->fb_height;
-	win_data->dma_addr = overlay->dma_addr[0] + offset;
+	if (is_yuv_support(overlay->pixel_format)) {
+		int hsub = drm_format_horz_chroma_subsampling(overlay->pixel_format);
+		int vsub = drm_format_vert_chroma_subsampling(overlay->pixel_format);
+		int bpp = rockchip_drm_format_plane_bpp(overlay->pixel_format, 1);
+
+		offset = (overlay->fb_x >> 16) * bpp / hsub / 8;
+		offset += (overlay->fb_y >> 16) * overlay->pitches[1] / vsub;
+		win_data->dma_addr[1] = overlay->dma_addr[1] + offset + overlay->offsets[1];
+	}
+
+	offset = overlay->fb_x * (overlay->bpp >> 3);
+	offset += overlay->fb_y * overlay->pitches[0];
+	win_data->dma_addr[0] = overlay->dma_addr[0] + offset + overlay->offsets[0];
+
 	win_data->bpp = overlay->bpp;
 	win_data->buf_offsize = (overlay->fb_width - overlay->crtc_width) *
 				(overlay->bpp >> 3);
 	win_data->line_size = overlay->crtc_width * (overlay->bpp >> 3);
+	win_data->pixel_format = overlay->pixel_format;
 	head = drm_disp->modelist;
-	list_for_each(pos,head){
+	list_for_each(pos, head) {
 		modelist = list_entry(pos, struct fb_modelist, list);
 		mode = &modelist->mode;
-		if(mode->xres == overlay->mode_width && mode->yres == overlay->mode_height
-				&& mode->pixclock == overlay->pixclock)
+		if (mode->xres == overlay->mode_width &&
+		    mode->yres == overlay->mode_height &&
+		    mode->pixclock == overlay->pixclock)
 			break;
 	}
-	if(drm_disp->mode != mode){
-	printk(KERN_ERR"%s %d\n", __func__,__LINE__);
+	if (drm_disp->mode != mode) {
 		drm_disp->mode = mode;
-		printk("overlay [%dx%d-%d] mode[%dx%d-%d]\n",overlay->mode_width,overlay->mode_height,overlay->pixclock,mode->xres,mode->yres,mode->pixclock);
-//		printk("overlay->mode_width=%d overlay->mode_height=%d mode_width=%d mode_height=%d",overlay->mode_width,overlay->mode_height,mode->xres,mode->yres);
-
 		drm_disp->enable = true;
-		rk_drm_disp_handle(drm_disp,0,RK_DRM_SCREEN_SET);
+		rk_drm_disp_handle(drm_disp, 0, RK_DRM_SCREEN_SET);
 	}
-
-
 }
 
 static void extend_win_set_pixfmt(struct device *dev, unsigned int win)
@@ -478,10 +465,6 @@ static void extend_win_set_pixfmt(struct device *dev, unsigned int win)
 
 static void extend_win_set_colkey(struct device *dev, unsigned int win)
 {
-//	struct extend_context *ctx = get_extend_context(dev);
-
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-
 }
 
 ktime_t win_start;
@@ -492,13 +475,10 @@ static void extend_win_commit(struct device *dev, int zpos)
 {
 	struct extend_context *ctx = get_extend_context(dev);
 	struct rk_drm_display *drm_disp = ctx->drm_disp;
-	struct rk_win_data *rk_win = NULL; 
+	struct rk_win_data *rk_win = NULL;
 	struct extend_win_data *win_data;
 	int win = zpos;
-	unsigned long val,  size;
-	u32 xpos, ypos;
 
-	//printk(KERN_ERR"%s %d\n", __func__,__LINE__);
 	if (ctx->suspended)
 		return;
 
@@ -507,48 +487,68 @@ static void extend_win_commit(struct device *dev, int zpos)
 
 	if (win < 0 || win > WINDOWS_NR)
 		return;
-	if(win == 0){
-		win_start = ktime_get();
-		win_start = ktime_sub(win_start, win_end);
-//		printk("user flip buffer time %dms\n", (int)ktime_to_ms(win_start));
-		//	win_start = ktime_get();
-	}
+#if 0
+	/* if(win == 0){
+	 *	win_start = ktime_get();
+	 *	win_start = ktime_sub(win_start, win_end);
+	 *	pr_info("user flip buffer time %dus\n",
+	 *		(int)ktime_to_us(win_start));
+	 *	win_start = ktime_get();
+	 *}
+	 */
+#endif
 	rk_win = &drm_disp->win[win];
 	win_data = &ctx->win_data[win];
-	switch(win_data->bpp){
-		case 32:
-			rk_win->format = ARGB888;
-			break;
-		case 24:
-			rk_win->format = RGB888;
-			break;
-		case 16:
-			rk_win->format = RGB565;
-			break;
-		default:
-			printk("not support format %d\n",win_data->bpp);
-			break;
-	}
 
 	rk_win->xpos = win_data->offset_x;
 	rk_win->ypos = win_data->offset_y;
-	rk_win->xact = win_data->ovl_width;
-	rk_win->yact = win_data->ovl_height;
+	rk_win->xact = win_data->src_width;
+	rk_win->yact = win_data->src_height;
 	rk_win->xsize = win_data->ovl_width;
 	rk_win->ysize = win_data->ovl_height;
-	rk_win->xvir = win_data->fb_width;
-	rk_win->yrgb_addr = win_data->dma_addr;
+	rk_win->yvir = win_data->fb_height;
+	rk_win->yrgb_addr = win_data->dma_addr[0];
 	rk_win->enabled = true;
-
-	rk_drm_disp_handle(drm_disp,1<<win,RK_DRM_WIN_COMMIT | RK_DRM_DISPLAY_COMMIT);
-		
-	win_data->enabled = true;
-	if(win ==0){
-	//	win_end = ktime_get();
-	//	win_end = ktime_sub(win_end, win_start);
-	//	printk("flip buffer time %dus\n", (int)ktime_to_us(win_end));
-		win_end = ktime_get();
+	switch (win_data->pixel_format) {
+	case DRM_FORMAT_NV12:
+		rk_win->format = YUV420;
+		rk_win->uv_addr = win_data->dma_addr[1];
+		rk_win->xvir = win_data->fb_width / 4;
+		rk_win->uv_vir = rk_win->xvir;
+		break;
+	case DRM_FORMAT_RGB888:
+		rk_win->format = RGB888;
+		rk_win->xvir = win_data->fb_width * 3 / 4;
+		break;
+	case DRM_FORMAT_ARGB8888:
+		rk_win->format = ARGB888;
+		rk_win->xvir = win_data->fb_width;
+		break;
+	case DRM_FORMAT_XRGB8888:
+		rk_win->format = XRGB888;
+		rk_win->xvir = win_data->fb_width;
+		break;
+	case DRM_FORMAT_RGB565:
+		rk_win->format = RGB565;
+		rk_win->xvir = win_data->fb_width / 2;
+		break;
+	default:
+		pr_info("not support format 0x%x\n", win_data->pixel_format);
+		break;
 	}
+
+	rk_drm_disp_handle(drm_disp, 1 << win,
+			   RK_DRM_WIN_COMMIT | RK_DRM_DISPLAY_COMMIT);
+	win_data->enabled = true;
+#if 0
+	/* if(win ==0){
+	 *	win_end = ktime_get();
+	 *	win_end = ktime_sub(win_end, win_start);
+	 *	printk("flip buffer time %dus\n", (int)ktime_to_us(win_end));
+	 *	win_end = ktime_get();
+	 *}
+	 */
+#endif
 }
 
 static void extend_win_disable(struct device *dev, int zpos)
@@ -557,8 +557,6 @@ static void extend_win_disable(struct device *dev, int zpos)
 	struct rk_drm_display *drm_disp = ctx->drm_disp;
 	struct extend_win_data *win_data;
 	int win = zpos;
-
-	DRM_DEBUG_KMS("%s\n", __FILE__);
 
 	if (win == DEFAULT_ZPOS)
 		win = ctx->default_win;
@@ -574,7 +572,8 @@ static void extend_win_disable(struct device *dev, int zpos)
 		return;
 	}
 	drm_disp->win[win].enabled = false;
-	rk_drm_disp_handle(drm_disp,1<<win,RK_DRM_WIN_COMMIT | RK_DRM_DISPLAY_COMMIT);
+	rk_drm_disp_handle(drm_disp, 1<<win,
+			   RK_DRM_WIN_COMMIT | RK_DRM_DISPLAY_COMMIT);
 
 	win_data->enabled = false;
 }
@@ -591,6 +590,7 @@ static struct rockchip_drm_manager extend_manager = {
 	.overlay_ops	= &extend_overlay_ops,
 	.display_ops	= &extend_display_ops,
 };
+
 #if 0
 static irqreturn_t extend_irq_handler(int irq, void *dev_id)
 {
@@ -618,10 +618,9 @@ out:
 	return IRQ_HANDLED;
 }
 #endif
+
 static int extend_subdrv_probe(struct drm_device *drm_dev, struct device *dev)
 {
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-
 	/*
 	 * enable drm irq mode.
 	 * - with irq_enabled = 1, we can use the vblank feature.
@@ -648,22 +647,15 @@ static int extend_subdrv_probe(struct drm_device *drm_dev, struct device *dev)
 
 static void extend_subdrv_remove(struct drm_device *drm_dev, struct device *dev)
 {
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-
 	/* detach this sub driver from iommu mapping if supported. */
 	if (is_drm_iommu_supported(drm_dev))
 		drm_iommu_detach_device(drm_dev, dev);
 }
 
-
 static void extend_clear_win(struct extend_context *ctx, int win)
 {
-	u32 val;
-
-	DRM_DEBUG_KMS("%s\n", __FILE__);
 
 }
-
 
 static void extend_window_suspend(struct device *dev)
 {
@@ -696,14 +688,13 @@ static int extend_activate(struct extend_context *ctx, bool enable)
 {
 	struct device *dev = ctx->subdrv.dev;
 	struct rk_drm_display *drm_disp = ctx->drm_disp;
-	if (enable) {
-		int ret;
 
+	if (enable) {
 		ctx->suspended = false;
 
 		drm_disp->enable = true;
 
-		rk_drm_disp_handle(drm_disp,0,RK_DRM_SCREEN_BLANK);
+		rk_drm_disp_handle(drm_disp, 0, RK_DRM_SCREEN_BLANK);
 
 		/* if vblank was enabled status, enable it again. */
 		if (ctx->vblank_en)
@@ -715,7 +706,7 @@ static int extend_activate(struct extend_context *ctx, bool enable)
 
 		drm_disp->enable = false;
 
-		rk_drm_disp_handle(drm_disp,0,RK_DRM_SCREEN_BLANK);
+		rk_drm_disp_handle(drm_disp, 0, RK_DRM_SCREEN_BLANK);
 
 		ctx->suspended = true;
 	}
@@ -730,7 +721,6 @@ static int extend_probe(struct platform_device *pdev)
 	struct rockchip_drm_subdrv *subdrv;
 	struct rockchip_drm_panel_info *panel;
 	struct rk_drm_display *drm_display = NULL;
-	int ret = -EINVAL;
 
 	DRM_DEBUG_KMS("%s\n", __FILE__);
 
@@ -739,12 +729,13 @@ static int extend_probe(struct platform_device *pdev)
 	if (!ctx)
 		return -ENOMEM;
 
-	panel = devm_kzalloc(dev, sizeof(struct rockchip_drm_panel_info), GFP_KERNEL);
+	panel = devm_kzalloc(dev, sizeof(struct rockchip_drm_panel_info),
+			     GFP_KERNEL);
 	ctx->panel = panel;
 
 	drm_display = rk_drm_get_diplay(RK_DRM_EXTEND_SCREEN);
 	ctx->drm_disp = drm_display;
-	ctx->default_win = 0;
+	ctx->default_win = 1;
 
 	drm_display->event_call_back = extend_event_call_back_handle;
 
@@ -764,8 +755,8 @@ static int extend_probe(struct platform_device *pdev)
 
 	pm_runtime_enable(dev);
 	pm_runtime_get_sync(dev);
-	
-	//extend_commit(dev);
+
+	/* extend_commit(dev); */
 	extend_activate(ctx, true);
 
 	rockchip_drm_subdrv_register(subdrv);

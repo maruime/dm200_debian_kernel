@@ -29,13 +29,11 @@ static int rockchip_drm_create_enc_conn(struct drm_device *dev,
 	struct drm_connector *connector;
 	int ret;
 
-	DRM_DEBUG_DRIVER("%s\n", __FILE__);
-
 	subdrv->manager->dev = subdrv->dev;
 
 	/* create and initialize a encoder for this sub driver. */
 	encoder = rockchip_drm_encoder_create(dev, subdrv->manager,
-			(1 << MAX_CRTC) - 1);
+					      (1 << MAX_CRTC) - 1);
 	if (!encoder) {
 		DRM_ERROR("failed to create encoder\n");
 		return -EFAULT;
@@ -66,19 +64,21 @@ static void rockchip_drm_destroy_enc_conn(struct rockchip_drm_subdrv *subdrv)
 {
 	if (subdrv->encoder) {
 		struct drm_encoder *encoder = subdrv->encoder;
+
 		encoder->funcs->destroy(encoder);
 		subdrv->encoder = NULL;
 	}
 
 	if (subdrv->connector) {
 		struct drm_connector *connector = subdrv->connector;
+
 		connector->funcs->destroy(connector);
 		subdrv->connector = NULL;
 	}
 }
 
 static int rockchip_drm_subdrv_probe(struct drm_device *dev,
-					struct rockchip_drm_subdrv *subdrv)
+				     struct rockchip_drm_subdrv *subdrv)
 {
 	if (subdrv->probe) {
 		int ret;
@@ -102,10 +102,8 @@ static int rockchip_drm_subdrv_probe(struct drm_device *dev,
 }
 
 static void rockchip_drm_subdrv_remove(struct drm_device *dev,
-				      struct rockchip_drm_subdrv *subdrv)
+				       struct rockchip_drm_subdrv *subdrv)
 {
-	DRM_DEBUG_DRIVER("%s\n", __FILE__);
-
 	if (subdrv->remove)
 		subdrv->remove(dev, subdrv->dev);
 }
@@ -115,8 +113,6 @@ int rockchip_drm_device_register(struct drm_device *dev)
 	struct rockchip_drm_subdrv *subdrv, *n;
 	unsigned int fine_cnt = 0;
 	int err;
-
-	DRM_DEBUG_DRIVER("%s\n", __FILE__);
 
 	if (!dev)
 		return -EINVAL;
@@ -160,8 +156,6 @@ int rockchip_drm_device_unregister(struct drm_device *dev)
 {
 	struct rockchip_drm_subdrv *subdrv;
 
-	DRM_DEBUG_DRIVER("%s\n", __FILE__);
-
 	if (!dev) {
 		WARN(1, "Unexpected drm device unregister!\n");
 		return -EINVAL;
@@ -178,8 +172,6 @@ EXPORT_SYMBOL_GPL(rockchip_drm_device_unregister);
 
 int rockchip_drm_subdrv_register(struct rockchip_drm_subdrv *subdrv)
 {
-	DRM_DEBUG_DRIVER("%s\n", __FILE__);
-
 	if (!subdrv)
 		return -EINVAL;
 
@@ -191,8 +183,6 @@ EXPORT_SYMBOL_GPL(rockchip_drm_subdrv_register);
 
 int rockchip_drm_subdrv_unregister(struct rockchip_drm_subdrv *subdrv)
 {
-	DRM_DEBUG_DRIVER("%s\n", __FILE__);
-
 	if (!subdrv)
 		return -EINVAL;
 

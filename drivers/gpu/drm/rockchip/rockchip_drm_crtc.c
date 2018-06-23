@@ -46,6 +46,8 @@ enum rockchip_crtc_mode {
 struct rockchip_drm_crtc {
 	struct drm_crtc			drm_crtc;
 	struct drm_plane		*plane;
+	struct device			*vop_dev;
+	int				win_num;
 	unsigned int			pipe;
 	unsigned int			dpms;
 	enum rockchip_crtc_mode		mode;
@@ -53,11 +55,84 @@ struct rockchip_drm_crtc {
 	atomic_t			pending_flip;
 };
 
+bool is_yuv_support(uint32_t format)
+{
+	switch (format) {
+	case DRM_FORMAT_YUYV:
+	case DRM_FORMAT_YVYU:
+	case DRM_FORMAT_UYVY:
+	case DRM_FORMAT_VYUY:
+	case DRM_FORMAT_NV12:
+	case DRM_FORMAT_NV21:
+	case DRM_FORMAT_NV16:
+	case DRM_FORMAT_NV61:
+	case DRM_FORMAT_NV24:
+	case DRM_FORMAT_NV42:
+	case DRM_FORMAT_YUV410:
+	case DRM_FORMAT_YVU410:
+	case DRM_FORMAT_YUV411:
+	case DRM_FORMAT_YVU411:
+	case DRM_FORMAT_YUV420:
+	case DRM_FORMAT_YVU420:
+	case DRM_FORMAT_YUV422:
+	case DRM_FORMAT_YVU422:
+	case DRM_FORMAT_YUV444:
+	case DRM_FORMAT_YVU444:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/**
+ * drm_format_plane_bpp - get the bpp for format
+ * @format: pixel format (DRM_FORMAT_*)
+ * @plane: plane index
+ *
+ * Returns:
+ * The bpp for the specified plane.
+ */
+int rockchip_drm_format_plane_bpp(uint32_t format, int plane)
+{
+	unsigned int depth;
+	int bpp;
+
+	if (plane >= drm_format_num_planes(format))
+		return 0;
+
+	switch (format) {
+	case DRM_FORMAT_YUYV:
+	case DRM_FORMAT_YVYU:
+	case DRM_FORMAT_UYVY:
+	case DRM_FORMAT_VYUY:
+		return 16;
+	case DRM_FORMAT_NV12:
+	case DRM_FORMAT_NV21:
+	case DRM_FORMAT_NV16:
+	case DRM_FORMAT_NV61:
+	case DRM_FORMAT_NV24:
+	case DRM_FORMAT_NV42:
+		return plane ? 16 : 8;
+	case DRM_FORMAT_YUV410:
+	case DRM_FORMAT_YVU410:
+	case DRM_FORMAT_YUV411:
+	case DRM_FORMAT_YVU411:
+	case DRM_FORMAT_YUV420:
+	case DRM_FORMAT_YVU420:
+	case DRM_FORMAT_YUV422:
+	case DRM_FORMAT_YVU422:
+	case DRM_FORMAT_YUV444:
+	case DRM_FORMAT_YVU444:
+		return 8;
+	default:
+		drm_fb_get_bpp_depth(format, &depth, &bpp);
+		return bpp;
+	}
+}
+
 static void rockchip_drm_crtc_dpms(struct drm_crtc *crtc, int mode)
 {
 	struct rockchip_drm_crtc *rockchip_crtc = to_rockchip_crtc(crtc);
-
-//	printk(KERN_ERR"crtc[%d] mode[%d]\n", crtc->base.id, mode);
 
 	if (rockchip_crtc->dpms == mode) {
 		DRM_DEBUG_KMS("desired dpms mode is same as previous one.\n");
@@ -67,7 +142,7 @@ static void rockchip_drm_crtc_dpms(struct drm_crtc *crtc, int mode)
 	if (mode > DRM_MODE_DPMS_ON) {
 		/* wait for the completion of page flip. */
 		wait_event(rockchip_crtc->pending_flip_queue,
-				atomic_read(&rockchip_crtc->pending_flip) == 0);
+			   atomic_read(&rockchip_crtc->pending_flip) == 0);
 		drm_vblank_off(crtc->dev, rockchip_crtc->pipe);
 	}
 
@@ -77,16 +152,12 @@ static void rockchip_drm_crtc_dpms(struct drm_crtc *crtc, int mode)
 
 static void rockchip_drm_crtc_prepare(struct drm_crtc *crtc)
 {
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-
 	/* drm framework doesn't check NULL. */
 }
 
 static void rockchip_drm_crtc_commit(struct drm_crtc *crtc)
 {
 	struct rockchip_drm_crtc *rockchip_crtc = to_rockchip_crtc(crtc);
-
-	DRM_DEBUG_KMS("%s\n", __FILE__);
 
 	rockchip_drm_crtc_dpms(crtc, DRM_MODE_DPMS_ON);
 	rockchip_plane_commit(rockchip_crtc->plane);
@@ -95,19 +166,17 @@ static void rockchip_drm_crtc_commit(struct drm_crtc *crtc)
 
 static bool
 rockchip_drm_crtc_mode_fixup(struct drm_crtc *crtc,
-			    const struct drm_display_mode *mode,
-			    struct drm_display_mode *adjusted_mode)
+			     const struct drm_display_mode *mode,
+			     struct drm_display_mode *adjusted_mode)
 {
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-
 	/* drm framework doesn't check NULL */
 	return true;
 }
 
 static int
 rockchip_drm_crtc_mode_set(struct drm_crtc *crtc, struct drm_display_mode *mode,
-			  struct drm_display_mode *adjusted_mode, int x, int y,
-			  struct drm_framebuffer *old_fb)
+			   struct drm_display_mode *adjusted_mode, int x, int y,
+			   struct drm_framebuffer *old_fb)
 {
 	struct rockchip_drm_crtc *rockchip_crtc = to_rockchip_crtc(crtc);
 	struct drm_plane *plane = rockchip_crtc->plane;
@@ -115,8 +184,6 @@ rockchip_drm_crtc_mode_set(struct drm_crtc *crtc, struct drm_display_mode *mode,
 	unsigned int crtc_h;
 	int pipe = rockchip_crtc->pipe;
 	int ret;
-
-	DRM_DEBUG_KMS("%s\n", __FILE__);
 
 	/*
 	 * copy the mode data adjusted by mode_fixup() into crtc->mode
@@ -141,7 +208,7 @@ rockchip_drm_crtc_mode_set(struct drm_crtc *crtc, struct drm_display_mode *mode,
 }
 
 static int rockchip_drm_crtc_mode_set_base(struct drm_crtc *crtc, int x, int y,
-					  struct drm_framebuffer *old_fb)
+					   struct drm_framebuffer *old_fb)
 {
 	struct rockchip_drm_crtc *rockchip_crtc = to_rockchip_crtc(crtc);
 	struct drm_plane *plane = rockchip_crtc->plane;
@@ -149,19 +216,15 @@ static int rockchip_drm_crtc_mode_set_base(struct drm_crtc *crtc, int x, int y,
 	unsigned int crtc_h;
 	int ret;
 
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-	
 	/* when framebuffer changing is requested, crtc's dpms should be on */
-	if (rockchip_crtc->dpms > DRM_MODE_DPMS_ON) {
+	if (rockchip_crtc->dpms > DRM_MODE_DPMS_ON)
 		DRM_ERROR("failed framebuffer changing request.\n");
-//		return -EPERM;
-	}
 
 	crtc_w = crtc->fb->width - x;
 	crtc_h = crtc->fb->height - y;
 
-	ret = rockchip_plane_mode_set(plane, crtc, crtc->fb, 0, 0, crtc_w, crtc_h,
-				    x, y, crtc_w, crtc_h);
+	ret = rockchip_plane_mode_set(plane, crtc, crtc->fb, 0, 0, crtc_w,
+				      crtc_h, x, y, crtc_w, crtc_h);
 	if (ret)
 		return ret;
 
@@ -172,15 +235,12 @@ static int rockchip_drm_crtc_mode_set_base(struct drm_crtc *crtc, int x, int y,
 
 static void rockchip_drm_crtc_load_lut(struct drm_crtc *crtc)
 {
-	DRM_DEBUG_KMS("%s\n", __FILE__);
 	/* drm framework doesn't check NULL */
 }
 
 static void rockchip_drm_crtc_disable(struct drm_crtc *crtc)
 {
 	struct rockchip_drm_crtc *rockchip_crtc = to_rockchip_crtc(crtc);
-
-	DRM_DEBUG_KMS("%s\n", __FILE__);
 
 	rockchip_plane_dpms(rockchip_crtc->plane, DRM_MODE_DPMS_OFF);
 	rockchip_drm_crtc_dpms(crtc, DRM_MODE_DPMS_OFF);
@@ -198,17 +258,14 @@ static struct drm_crtc_helper_funcs rockchip_crtc_helper_funcs = {
 };
 
 static int rockchip_drm_crtc_page_flip(struct drm_crtc *crtc,
-				      struct drm_framebuffer *fb,
-				      struct drm_pending_vblank_event *event)
+				       struct drm_framebuffer *fb,
+				       struct drm_pending_vblank_event *event)
 {
 	struct drm_device *dev = crtc->dev;
 	struct rockchip_drm_private *dev_priv = dev->dev_private;
 	struct rockchip_drm_crtc *rockchip_crtc = to_rockchip_crtc(crtc);
 	struct drm_framebuffer *old_fb = crtc->fb;
 	int ret = -EINVAL;
-
-
-	DRM_DEBUG_KMS("%s\n", __FILE__);
 
 	/* when the page flip is requested, crtc's dpms should be on */
 	if (rockchip_crtc->dpms > DRM_MODE_DPMS_ON) {
@@ -234,13 +291,13 @@ static int rockchip_drm_crtc_page_flip(struct drm_crtc *crtc,
 
 		spin_lock_irq(&dev->event_lock);
 		list_add_tail(&event->base.link,
-				&dev_priv->pageflip_event_list);
+			      &dev_priv->pageflip_event_list);
 		atomic_set(&rockchip_crtc->pending_flip, 1);
 		spin_unlock_irq(&dev->event_lock);
 
 		crtc->fb = fb;
 		ret = rockchip_drm_crtc_mode_set_base(crtc, crtc->x, crtc->y,
-						    NULL);
+						      NULL);
 		if (ret) {
 			crtc->fb = old_fb;
 
@@ -262,8 +319,6 @@ static void rockchip_drm_crtc_destroy(struct drm_crtc *crtc)
 	struct rockchip_drm_crtc *rockchip_crtc = to_rockchip_crtc(crtc);
 	struct rockchip_drm_private *private = crtc->dev->dev_private;
 
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-
 	private->crtc[rockchip_crtc->pipe] = NULL;
 
 	drm_crtc_cleanup(crtc);
@@ -271,8 +326,8 @@ static void rockchip_drm_crtc_destroy(struct drm_crtc *crtc)
 }
 
 static int rockchip_drm_crtc_set_property(struct drm_crtc *crtc,
-					struct drm_property *property,
-					uint64_t val)
+					  struct drm_property *property,
+					  uint64_t val)
 {
 	struct drm_device *dev = crtc->dev;
 	struct rockchip_drm_private *dev_priv = dev->dev_private;
@@ -294,7 +349,7 @@ static int rockchip_drm_crtc_set_property(struct drm_crtc *crtc,
 			break;
 		case CRTC_MODE_BLANK:
 			rockchip_plane_dpms(rockchip_crtc->plane,
-					  DRM_MODE_DPMS_OFF);
+					    DRM_MODE_DPMS_OFF);
 			break;
 		default:
 			break;
@@ -345,8 +400,6 @@ int rockchip_drm_crtc_create(struct drm_device *dev, unsigned int nr)
 	struct rockchip_drm_private *private = dev->dev_private;
 	struct drm_crtc *crtc;
 
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-
 	rockchip_crtc = kzalloc(sizeof(*rockchip_crtc), GFP_KERNEL);
 	if (!rockchip_crtc) {
 		DRM_ERROR("failed to allocate rockchip crtc\n");
@@ -374,11 +427,12 @@ int rockchip_drm_crtc_create(struct drm_device *dev, unsigned int nr)
 
 	return 0;
 }
+
 #if 0
 int rockchip_get_crtc_vblank_timestamp(struct drm_device *dev, int crtc,
-				    int *max_error,
-				    struct timeval *vblank_time,
-				    unsigned flags)
+				       int *max_error,
+				       struct timeval *vblank_time,
+				       unsigned flags)
 {
 	struct rockchip_drm_private *private = dev->dev_private;
 	struct rockchip_drm_crtc *rockchip_crtc =
@@ -388,23 +442,21 @@ int rockchip_get_crtc_vblank_timestamp(struct drm_device *dev, int crtc,
 		return -EPERM;
 
 	rockchip_drm_fn_encoder(private->crtc[crtc], &crtc,
-			rockchip_get_vblank_timestamp);
-	
+				rockchip_get_vblank_timestamp);
 }
 #endif
+
 int rockchip_drm_crtc_enable_vblank(struct drm_device *dev, int crtc)
 {
 	struct rockchip_drm_private *private = dev->dev_private;
 	struct rockchip_drm_crtc *rockchip_crtc =
 		to_rockchip_crtc(private->crtc[crtc]);
 
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-
 	if (rockchip_crtc->dpms != DRM_MODE_DPMS_ON)
 		return -EPERM;
 
 	rockchip_drm_fn_encoder(private->crtc[crtc], &crtc,
-			rockchip_drm_enable_vblank);
+				rockchip_drm_enable_vblank);
 
 	return 0;
 }
@@ -415,13 +467,11 @@ void rockchip_drm_crtc_disable_vblank(struct drm_device *dev, int crtc)
 	struct rockchip_drm_crtc *rockchip_crtc =
 		to_rockchip_crtc(private->crtc[crtc]);
 
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-
 	if (rockchip_crtc->dpms != DRM_MODE_DPMS_ON)
 		return;
 
 	rockchip_drm_fn_encoder(private->crtc[crtc], &crtc,
-			rockchip_drm_disable_vblank);
+				rockchip_drm_disable_vblank);
 }
 
 void rockchip_drm_crtc_finish_pageflip(struct drm_device *dev, int crtc)
@@ -432,12 +482,10 @@ void rockchip_drm_crtc_finish_pageflip(struct drm_device *dev, int crtc)
 	struct rockchip_drm_crtc *rockchip_crtc = to_rockchip_crtc(drm_crtc);
 	unsigned long flags;
 
-	DRM_DEBUG_KMS("%s\n", __FILE__);
-
 	spin_lock_irqsave(&dev->event_lock, flags);
 
 	list_for_each_entry_safe(e, t, &dev_priv->pageflip_event_list,
-			base.link) {
+				 base.link) {
 		/* if event's pipe isn't same as crtc then ignore it. */
 		if (crtc != e->pipe)
 			continue;

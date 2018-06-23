@@ -10,9 +10,10 @@ drm-y       :=	drm_auth.o drm_buffer.o drm_bufs.o drm_cache.o \
 		drm_lock.o drm_memory.o drm_proc.o drm_stub.o drm_vm.o \
 		drm_agpsupport.o drm_scatter.o drm_pci.o \
 		drm_platform.o drm_sysfs.o drm_hashtab.o drm_mm.o \
-		drm_crtc.o drm_modes.o drm_edid.o \
+		drm_crtc.o drm_modes.o \
 		drm_info.o drm_debugfs.o drm_encoder_slave.o \
-		drm_trace_points.o drm_global.o drm_prime.o
+		drm_trace_points.o drm_global.o drm_prime.o \
+		drm_sman.o
 
 drm-$(CONFIG_COMPAT) += drm_ioc32.o
 drm-$(CONFIG_DRM_GEM_CMA_HELPER) += drm_gem_cma_helper.o
@@ -53,4 +54,5 @@ obj-$(CONFIG_DRM_SHMOBILE) +=shmobile/
 obj-$(CONFIG_DRM_OMAP)	+= omapdrm/
 obj-$(CONFIG_DRM_TILCDC)	+= tilcdc/
 obj-$(CONFIG_DRM_QXL) += qxl/
+obj-$(CONFIG_DRM_MALI) += mali_drm/
 obj-y			+= i2c/

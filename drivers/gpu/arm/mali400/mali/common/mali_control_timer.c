@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2012, 2014 ARM Limited. All rights reserved.
+ * Copyright (C) 2010-2012, 2014-2017 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -18,12 +18,17 @@
 
 static u64 period_start_time = 0;
 
-static _mali_osk_timer_t *mali_control_timer = NULL;    // .KP : mali_control_timer
+/** .KP : mali_control_timer */
+static _mali_osk_timer_t *mali_control_timer = NULL;
 static mali_bool timer_running = MALI_FALSE;
 
-static u32 mali_control_timeout = 50;
+/**
+ * period_of_notifying_mali_utilization_to_platform_dependent_part,
+ * ms 为单位.
+ */
+static u32 mali_control_timeout = 20;
 
-void mali_control_timer_add(u32 timeout)	// 'timeout' : 以 ms 为单位.
+void mali_control_timer_add(u32 timeout)/* 'timeout' : 以 ms 为单位. */
 {
 	_mali_osk_timer_add(mali_control_timer, _mali_osk_time_mstoticks(timeout));
 }
@@ -33,14 +38,15 @@ void mali_control_timer_mod(u32 timeout_in_ms)
 	_mali_osk_timer_mod(mali_control_timer, _mali_osk_time_mstoticks(timeout_in_ms));
 }
 
-static void mali_control_timer_callback(void *arg)  // .KP : mali_control_timer_callback
+static void mali_control_timer_callback(void *arg)
 {
 	if (mali_utilization_enabled()) {
 		struct mali_gpu_utilization_data *util_data = NULL;
 		u64 time_period = 0;
+		mali_bool need_add_timer = MALI_TRUE;
 
 		/* Calculate gpu utilization */
-		util_data = mali_utilization_calculate(&period_start_time, &time_period);
+		util_data = mali_utilization_calculate(&period_start_time, &time_period, &need_add_timer);
 
 		if (util_data) {
 #if defined(CONFIG_MALI_DVFS)
@@ -48,11 +54,11 @@ static void mali_control_timer_callback(void *arg)  // .KP : mali_control_timer_
 #else
 			mali_utilization_platform_realize(util_data);
 #endif
-		}
 
-		if (MALI_TRUE == timer_running) {   // .CP : 
-			// mali_control_timer_add(mali_control_timeout);
-			mali_control_timer_mod(mali_control_timeout);
+		if (MALI_TRUE == timer_running)
+			if (MALI_TRUE == need_add_timer) {
+				mali_control_timer_mod(mali_control_timeout);
+			}
 		}
 	}
 }
@@ -91,6 +97,8 @@ void mali_control_timer_term(void)
 
 mali_bool mali_control_timer_resume(u64 time_now)
 {
+	mali_utilization_data_assert_locked();
+
 	if (timer_running != MALI_TRUE) {
 		timer_running = MALI_TRUE;
 
@@ -102,6 +110,14 @@ mali_bool mali_control_timer_resume(u64 time_now)
 	}
 
 	return MALI_FALSE;
+}
+
+void mali_control_timer_pause(void)
+{
+	mali_utilization_data_assert_locked();
+	if (timer_running == MALI_TRUE) {
+		timer_running = MALI_FALSE;
+	}
 }
 
 void mali_control_timer_suspend(mali_bool suspend)

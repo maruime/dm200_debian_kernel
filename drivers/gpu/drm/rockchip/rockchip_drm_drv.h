@@ -18,8 +18,8 @@
 
 #include <linux/module.h>
 
-#define MAX_CRTC	3
-#define MAX_PLANE	5
+#define MAX_CRTC	1  /* hjc change 3 to 1 for px3se */
+#define MAX_PLANE	3  /* hjc change 5 to 3 for px3se */
 #define MAX_FB_BUFFER	4
 #define DEFAULT_ZPOS	-1
 
@@ -43,6 +43,9 @@ struct drm_connector;
 
 extern unsigned int drm_vblank_offdelay;
 
+#if defined(CONFIG_ION_ROCKCHIP)
+extern struct ion_client *rockchip_ion_client_create(const char *name);
+#endif
 /* this enumerates display type. */
 enum rockchip_drm_output_type {
 	ROCKCHIP_DISPLAY_TYPE_NONE,
@@ -123,7 +126,8 @@ struct rockchip_drm_overlay {
 	unsigned int pixclock;
 	unsigned int scan_flag;
 	unsigned int bpp;
-	unsigned int pitch;
+	unsigned int pitches[MAX_FB_BUFFER];
+	unsigned int offsets[MAX_FB_BUFFER];
 	uint32_t pixel_format;
 	dma_addr_t dma_addr[MAX_FB_BUFFER];
 	int zpos;
@@ -151,7 +155,7 @@ struct rockchip_drm_display_ops {
 	enum rockchip_drm_output_type type;
 	bool (*is_connected)(struct device *dev);
 	struct edid *(*get_edid)(struct device *dev,
-			struct drm_connector *connector);
+				 struct drm_connector *connector);
 	void *(*get_panel)(struct device *dev);
 	void *(*get_modelist)(struct device *dev);
 	int (*check_timing)(struct device *dev, void *timing);
@@ -177,12 +181,12 @@ struct rockchip_drm_manager_ops {
 	void (*dpms)(struct device *subdrv_dev, int mode);
 	void (*apply)(struct device *subdrv_dev);
 	void (*mode_fixup)(struct device *subdrv_dev,
-				struct drm_connector *connector,
-				const struct drm_display_mode *mode,
-				struct drm_display_mode *adjusted_mode);
+			   struct drm_connector *connector,
+			   const struct drm_display_mode *mode,
+			   struct drm_display_mode *adjusted_mode);
 	void (*mode_set)(struct device *subdrv_dev, void *mode);
 	void (*get_max_resol)(struct device *subdrv_dev, unsigned int *width,
-				unsigned int *height);
+			      unsigned int *height);
 	void (*commit)(struct device *subdrv_dev);
 	int (*enable_vblank)(struct device *subdrv_dev);
 	void (*disable_vblank)(struct device *subdrv_dev);
@@ -243,9 +247,11 @@ struct drm_rockchip_file_private {
  */
 struct rockchip_drm_private {
 	struct drm_fb_helper *fb_helper;
+	struct drm_gem_object *fbdev_bo;
 
 	/* list head for new event to be added. */
 	struct list_head pageflip_event_list;
+	struct ion_client *ion_client;
 
 	/*
 	 * created crtc object would be contained at this array and
@@ -258,6 +264,7 @@ struct rockchip_drm_private {
 	unsigned long da_start;
 	unsigned long da_space_size;
 	unsigned long da_space_order;
+	bool iommu_en;
 };
 
 /*
@@ -287,9 +294,9 @@ struct rockchip_drm_subdrv {
 	int (*probe)(struct drm_device *drm_dev, struct device *dev);
 	void (*remove)(struct drm_device *drm_dev, struct device *dev);
 	int (*open)(struct drm_device *drm_dev, struct device *dev,
-			struct drm_file *file);
+		    struct drm_file *file);
 	void (*close)(struct drm_device *drm_dev, struct device *dev,
-			struct drm_file *file);
+		      struct drm_file *file);
 
 	struct drm_encoder *encoder;
 	struct drm_connector *connector;
@@ -322,8 +329,8 @@ int rockchip_drm_subdrv_open(struct drm_device *dev, struct drm_file *file);
 void rockchip_drm_subdrv_close(struct drm_device *dev, struct drm_file *file);
 
 /*
- * this function registers rockchip drm hdmi platform device. It ensures only one
- * instance of the device is created.
+ * this function registers rockchip drm hdmi platform device. It ensures only
+ * one instance of the device is created.
  */
 int rockchip_platform_device_hdmi_register(void);
 
